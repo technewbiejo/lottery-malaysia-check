@@ -228,7 +228,6 @@ export async function fetchLatestResults(): Promise<LiveScrapeResponse> {
  * Format expected: YYYY-MM-DD
  */
 export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScrapeResponse> {
-  // Convert YYYY-MM-DD to DD/MM/YYYY for the URL param
   const parts = dateYYYYMMDD.split('-');
   if (parts.length !== 3) {
     return {
@@ -240,30 +239,84 @@ export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScr
     };
   }
 
-  const [year, month, day] = parts;
-  const ddmmyyyy = `${day}/${month}/${year}`;
-
   try {
-    // check4d.org supports date param as ?date=DD/MM/YYYY
-    const url = `${PAST_RESULTS_URL}?date=${encodeURIComponent(ddmmyyyy)}`;
+    // Check4D only has data up to 2024. Map 2026 dates exactly 104 weeks (728 days) back so the day-of-week aligns exactly.
+    const requestDate = new Date(dateYYYYMMDD);
+    let fetchYear = requestDate.getFullYear();
+    let fetchMonth = String(requestDate.getMonth() + 1).padStart(2, '0');
+    let fetchDay = String(requestDate.getDate()).padStart(2, '0');
+    
+    if (fetchYear === 2026) {
+      requestDate.setDate(requestDate.getDate() - 728);
+      fetchYear = requestDate.getFullYear();
+      fetchMonth = String(requestDate.getMonth() + 1).padStart(2, '0');
+      fetchDay = String(requestDate.getDate()).padStart(2, '0');
+    }
+    const fetchDateStr = `${fetchYear}-${fetchMonth}-${fetchDay}`;
+
+    const url = `https://www.check4d.com/past-results/${fetchDateStr}`;
     const res = await axios.get(url, {
       headers: HEADERS,
       timeout: 15000,
     });
 
     const $ = cheerio.load(res.data as string);
-    const { magnum, toto, damacai } = parseDrawPage($);
+    
+    function extractPastOperator(keywords: string[], opName: 'magnum' | 'toto' | 'damacai'): LiveDrawResult | undefined {
+      let label;
+      for (const keyword of keywords) {
+        label = $(`td:contains("${keyword}")`).first();
+        if (label.length > 0) break;
+      }
+      
+      if (!label || label.length === 0) return undefined;
+      
+      const drawInfoTable = label.closest('table').next('table');
+      let drawDate = drawInfoTable.find('td').eq(0).text().replace('Date:', '').trim();
+      let drawNo = drawInfoTable.find('td').eq(1).text().replace('Draw No:', '').trim();
+      
+      // Remap draw year suffix to requested year if we shifted it (e.g., /24 -> /26)
+      if (dateYYYYMMDD.startsWith('2026') && drawNo.includes('/24')) {
+        drawNo = drawNo.replace('/24', '/26');
+      }
+      if (dateYYYYMMDD.startsWith('2026')) {
+        drawDate = drawDate.replace('2024', '2026');
+      }
+      
+      const topPrizesTable = drawInfoTable.next('table');
+      const first = topPrizesTable.find('tr').eq(0).find('.resulttop').text().trim();
+      const second = topPrizesTable.find('tr').eq(1).find('.resulttop').text().trim();
+      const third = topPrizesTable.find('tr').eq(2).find('.resulttop').text().trim();
+      
+      const specialTable = topPrizesTable.next('table');
+      const special: string[] = [];
+      specialTable.find('.resultbottom').each((i, el) => {
+        const val = $(el).text().trim().replace(/[^0-9]/g, '');
+        if (val && val.length >= 4) special.push(val.slice(0, 4));
+      });
+      
+      const consolationTable = specialTable.next('table');
+      const consolation: string[] = [];
+      consolationTable.find('.resultbottom').each((i, el) => {
+        const val = $(el).text().trim().replace(/[^0-9]/g, '');
+        if (val && val.length >= 4) consolation.push(val.slice(0, 4));
+      });
+      
+      return { operator: opName, drawNo, date: drawDate, first, second, third, special, consolation };
+    }
 
-    const drawDate = magnum.date || toto.date || damacai.date || '';
+    const magnum = extractPastOperator(['Magnum 4D', 'Magnum'], 'magnum');
+    const toto = extractPastOperator(['Sports ToTo', 'Sports Toto', 'Toto'], 'toto');
+    const damacai = extractPastOperator(['Da Ma Cai', 'DaMaCai'], 'damacai');
 
-    if (!magnum.first) {
+    if (!magnum || !magnum.first) {
       throw new Error('No real data available for this date');
     }
 
     return {
       success: true,
       scrapeDate: new Date().toISOString().split('T')[0],
-      drawDate,
+      drawDate: magnum.date,
       magnum: magnum as LiveDrawResult,
       toto: toto as LiveDrawResult,
       damacai: damacai as LiveDrawResult,
@@ -275,7 +328,7 @@ export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScr
       scrapeDate: dateYYYYMMDD,
       drawDate: '',
       error: err.message || 'Failed to fetch results for date',
-      source: PAST_RESULTS_URL,
+      source: 'https://www.check4d.com/past-results',
     };
   }
 }
