@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fetchLatestResults } from "../src/scraper";
-import { getStandardDrawDates, getDrawResults } from "../src/server_db";
-import { formatDraw } from "./_helpers";
+import { fetchLatestResults } from '../src/scraper.js';
+import { getStandardDrawDates, getDrawResults } from '../src/server_db.js';
+import { formatDraw } from './_helpers.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {

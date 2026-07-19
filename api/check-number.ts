@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { OperatorId, PrizeMatch } from "../src/types";
-import { getStandardDrawDates, getDrawResults } from "../src/server_db";
-import { getPermutations } from "./_helpers";
+import type { OperatorId, PrizeMatch } from '../src/types.js';
+import { getStandardDrawDates, getDrawResults } from '../src/server_db.js';
+import { getPermutations } from './_helpers.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {

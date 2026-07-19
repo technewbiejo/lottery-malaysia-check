@@ -1,4 +1,4 @@
-import { DrawData, OperatorId, DrawResults } from './types';
+import { DrawData, OperatorId, DrawResults } from './types.js';
 
 // Deterministic pseudo-random number generator to ensure consistent draws for any date
 function seedRandom(seedStr: string) {

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getDrawResults } from "../src/server_db";
+import { getDrawResults } from '../src/server_db.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   try {

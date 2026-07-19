@@ -2,8 +2,8 @@
  * Shared helpers for Vercel serverless API functions.
  */
 import { GoogleGenAI, Type } from "@google/genai";
-import type { OperatorId, PrizeMatch } from "../src/types";
-import type { LiveDrawResult } from "../src/scraper";
+import type { OperatorId, PrizeMatch } from '../src/types.js';
+import type { LiveDrawResult } from '../src/scraper.js';
 
 // ─── Permutation Helper ──────────────────────────────────────
 export function getPermutations(str: string): string[] {
