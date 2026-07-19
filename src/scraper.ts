@@ -240,21 +240,7 @@ export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScr
   }
 
   try {
-    // Check4D only has data up to 2024. Map 2026 dates exactly 104 weeks (728 days) back so the day-of-week aligns exactly.
-    const requestDate = new Date(dateYYYYMMDD);
-    let fetchYear = requestDate.getFullYear();
-    let fetchMonth = String(requestDate.getMonth() + 1).padStart(2, '0');
-    let fetchDay = String(requestDate.getDate()).padStart(2, '0');
-    
-    if (fetchYear === 2026) {
-      requestDate.setDate(requestDate.getDate() - 728);
-      fetchYear = requestDate.getFullYear();
-      fetchMonth = String(requestDate.getMonth() + 1).padStart(2, '0');
-      fetchDay = String(requestDate.getDate()).padStart(2, '0');
-    }
-    const fetchDateStr = `${fetchYear}-${fetchMonth}-${fetchDay}`;
-
-    const url = `https://www.check4d.com/past-results/${fetchDateStr}`;
+    const url = `https://www.check4d.com/past-results/${dateYYYYMMDD}`;
     const res = await axios.get(url, {
       headers: HEADERS,
       timeout: 15000,
@@ -274,14 +260,6 @@ export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScr
       const drawInfoTable = label.closest('table').next('table');
       let drawDate = drawInfoTable.find('td').eq(0).text().replace('Date:', '').trim();
       let drawNo = drawInfoTable.find('td').eq(1).text().replace('Draw No:', '').trim();
-      
-      // Remap draw year suffix to requested year if we shifted it (e.g., /24 -> /26)
-      if (dateYYYYMMDD.startsWith('2026') && drawNo.includes('/24')) {
-        drawNo = drawNo.replace('/24', '/26');
-      }
-      if (dateYYYYMMDD.startsWith('2026')) {
-        drawDate = drawDate.replace('2024', '2026');
-      }
       
       const topPrizesTable = drawInfoTable.next('table');
       const first = topPrizesTable.find('tr').eq(0).find('.resulttop').text().trim();
