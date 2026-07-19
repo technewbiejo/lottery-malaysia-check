@@ -199,6 +199,10 @@ export async function fetchLatestResults(): Promise<LiveScrapeResponse> {
     const drawDate = magnum.date || toto.date || damacai.date || '';
     const isoDate = toIsoDate(drawDate);
 
+    if (!magnum.first) {
+      throw new Error('No real data available for this date');
+    }
+
     return {
       success: true,
       scrapeDate: new Date().toISOString().split('T')[0],
@@ -251,6 +255,10 @@ export async function fetchResultsForDate(dateYYYYMMDD: string): Promise<LiveScr
     const { magnum, toto, damacai } = parseDrawPage($);
 
     const drawDate = magnum.date || toto.date || damacai.date || '';
+
+    if (!magnum.first) {
+      throw new Error('No real data available for this date');
+    }
 
     return {
       success: true,

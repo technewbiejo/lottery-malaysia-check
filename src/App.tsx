@@ -59,6 +59,10 @@ export default function App() {
   const [loadingToto, setLoadingToto] = useState<boolean>(false);
   const [loadingDamacai, setLoadingDamacai] = useState<boolean>(false);
 
+  const [errorMagnum, setErrorMagnum] = useState<string | null>(null);
+  const [errorToto, setErrorToto] = useState<string | null>(null);
+  const [errorDamacai, setErrorDamacai] = useState<string | null>(null);
+
   // Grounding states
   const [isLiveChecking, setIsLiveChecking] = useState<boolean>(false);
   const [groundingError, setGroundingError] = useState<string | null>(null);
@@ -361,54 +365,62 @@ export default function App() {
       });
   }, [selectedDate, realDrawsCache]);
 
-  // Tab 3: Dynamic Fetchers for each brand — try live scraper, fallback to DB
-  const fetchBrandDraw = (date: string, operator: OperatorId, setter: (d: DrawData) => void, setLoading: (b: boolean) => void) => {
+  // Tab 3: Dynamic Fetchers for each brand — try live scraper, fail if fallback
+  const fetchBrandDraw = (date: string, operator: OperatorId, setter: (d: DrawData | null) => void, setLoading: (b: boolean) => void, setError: (e: string | null) => void) => {
     if (!date) return;
+    setError(null);
     // If live draws are loaded and match this date, use them
     if (liveDraws && liveScrapeDrawDate && parseLiveDate(liveScrapeDrawDate) === date) {
       setter(liveDraws[operator]);
       return;
     }
     if (realDrawsCache[date]) {
-      setter(realDrawsCache[date][operator]);
+      if (realDrawsMetadata[date]?.fallbackUsed) {
+        setter(null);
+        const dStr = new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        setError(`${dStr} not able to shows real data.`);
+      } else {
+        setter(realDrawsCache[date][operator]);
+      }
       return;
     }
     setLoading(true);
     fetch(`/api/results-live?date=${date}`)
       .then(res => res.json())
       .then(data => {
-        if (data.status === 'success' && data.draws) {
-          setter(data.draws[operator]);
+        if (data.status === 'success') {
+          if (data.isLive && data.draws) {
+            setter(data.draws[operator]);
+          } else {
+            setter(null);
+            const dStr = new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            setError(`${dStr} not able to shows real data.`);
+          }
+        } else {
+          setter(null);
+          setError(data.message || 'Error connecting to scraper.');
         }
         setLoading(false);
       })
-      .catch(() => {
-        fetch(`/api/results?date=${date}`)
-          .then(res => res.json())
-          .then(data => {
-            if (data.status === 'success') {
-              setter(data.draws[operator]);
-            }
-            setLoading(false);
-          })
-          .catch(err => {
-            console.error(`Error fetching ${operator} table results:`, err);
-            setLoading(false);
-          });
+      .catch(err => {
+        console.error(`Error fetching ${operator} table results:`, err);
+        setter(null);
+        setError('Network error while fetching real results.');
+        setLoading(false);
       });
   };
 
   useEffect(() => {
-    fetchBrandDraw(tableDateMagnum, 'magnum', setMagnumDraw, setLoadingMagnum);
-  }, [tableDateMagnum, realDrawsCache, liveDraws]);
+    fetchBrandDraw(tableDateMagnum, 'magnum', setMagnumDraw, setLoadingMagnum, setErrorMagnum);
+  }, [tableDateMagnum, realDrawsCache, realDrawsMetadata, liveDraws]);
 
   useEffect(() => {
-    fetchBrandDraw(tableDateToto, 'toto', setTotoDraw, setLoadingToto);
-  }, [tableDateToto, realDrawsCache, liveDraws]);
+    fetchBrandDraw(tableDateToto, 'toto', setTotoDraw, setLoadingToto, setErrorToto);
+  }, [tableDateToto, realDrawsCache, realDrawsMetadata, liveDraws]);
 
   useEffect(() => {
-    fetchBrandDraw(tableDateDamacai, 'damacai', setDamacaiDraw, setLoadingDamacai);
-  }, [tableDateDamacai, realDrawsCache, liveDraws]);
+    fetchBrandDraw(tableDateDamacai, 'damacai', setDamacaiDraw, setLoadingDamacai, setErrorDamacai);
+  }, [tableDateDamacai, realDrawsCache, realDrawsMetadata, liveDraws]);
 
   // Standard Verification call
   const handleCheckNumber = (e?: FormEvent) => {
@@ -1406,18 +1418,11 @@ export default function App() {
 
                 {/* Date Picker select field */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {realDrawsCache[tableDateMagnum] ? (
-                    realDrawsMetadata[tableDateMagnum]?.fallbackUsed ? (
-                      <span className="text-[11px] bg-slate-950/10 text-amber-900 py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs" title="Quota Limit Reached. Showing Simulated Fallback results.">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        Demo Mode
-                      </span>
-                    ) : (
-                      <span className="text-[11px] bg-slate-950/10 text-slate-900 py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                        Verified Live
-                      </span>
-                    )
+                  {realDrawsCache[tableDateMagnum] && !realDrawsMetadata[tableDateMagnum]?.fallbackUsed ? (
+                    <span className="text-[11px] bg-slate-950/10 text-slate-900 py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      Verified Live
+                    </span>
                   ) : (
                     <button
                       onClick={() => handleFetchRealDraws(tableDateMagnum)}
@@ -1463,6 +1468,11 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center py-12 space-y-3">
                     <RefreshCw className="w-8 h-8 animate-spin text-amber-500" />
                     <span className="text-xs font-semibold text-slate-500">Querying Magnum results...</span>
+                  </div>
+                ) : errorMagnum ? (
+                  <div className="text-center py-6 text-red-600 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
+                    <p className="font-bold text-sm">{errorMagnum}</p>
                   </div>
                 ) : magnumDraw ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1578,18 +1588,11 @@ export default function App() {
 
                 {/* Date Picker select field */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {realDrawsCache[tableDateToto] ? (
-                    realDrawsMetadata[tableDateToto]?.fallbackUsed ? (
-                      <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs" title="Quota Limit Reached. Showing Simulated Fallback results.">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-200 shrink-0" />
-                        Demo Mode
-                      </span>
-                    ) : (
-                      <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
-                        Verified Live
-                      </span>
-                    )
+                  {realDrawsCache[tableDateToto] && !realDrawsMetadata[tableDateToto]?.fallbackUsed ? (
+                    <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                      Verified Live
+                    </span>
                   ) : (
                     <button
                       onClick={() => handleFetchRealDraws(tableDateToto)}
@@ -1635,6 +1638,11 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center py-12 space-y-3">
                     <RefreshCw className="w-8 h-8 animate-spin text-red-500" />
                     <span className="text-xs font-semibold text-slate-500">Querying Sports Toto results...</span>
+                  </div>
+                ) : errorToto ? (
+                  <div className="text-center py-6 text-red-600 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
+                    <p className="font-bold text-sm">{errorToto}</p>
                   </div>
                 ) : totoDraw ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1792,18 +1800,11 @@ export default function App() {
 
                 {/* Date Picker select field */}
                 <div className="flex flex-wrap items-center gap-3">
-                  {realDrawsCache[tableDateDamacai] ? (
-                    realDrawsMetadata[tableDateDamacai]?.fallbackUsed ? (
-                      <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs" title="Quota Limit Reached. Showing Simulated Fallback results.">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-200 shrink-0" />
-                        Demo Mode
-                      </span>
-                    ) : (
-                      <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
-                        Verified Live
-                      </span>
-                    )
+                  {realDrawsCache[tableDateDamacai] && !realDrawsMetadata[tableDateDamacai]?.fallbackUsed ? (
+                    <span className="text-[11px] bg-white/20 text-white py-1.5 px-3 rounded-lg font-bold flex items-center gap-1.5 shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                      Verified Live
+                    </span>
                   ) : (
                     <button
                       onClick={() => handleFetchRealDraws(tableDateDamacai)}
@@ -1849,6 +1850,11 @@ export default function App() {
                   <div className="flex flex-col items-center justify-center py-12 space-y-3">
                     <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
                     <span className="text-xs font-semibold text-slate-500">Querying Da Ma Cai results...</span>
+                  </div>
+                ) : errorDamacai ? (
+                  <div className="text-center py-6 text-red-600 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
+                    <p className="font-bold text-sm">{errorDamacai}</p>
                   </div>
                 ) : damacaiDraw ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
