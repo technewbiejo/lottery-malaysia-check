@@ -1,0 +1,6 @@
+{
+  "name": "Lottery Malaysia Check",
+  "description": "A clean, secure, and fast interface to search and verify Malaysia lottery results for Sports Toto, Magnum 4D, and Da Ma Cai, with smart number analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
